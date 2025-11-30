@@ -1,0 +1,257 @@
+openapi: 3.0.3
+info:
+  title: Subscription Aggregator Service
+  version: 1.0.0
+  description: API for managing and summing online subscription costs.
+servers:
+  - url: http://localhost:8080
+paths:
+  /subscriptions:
+    get:
+      summary: List subscriptions
+      parameters:
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by user UUID.
+        - in: query
+          name: service_name
+          schema:
+            type: string
+          description: Filter by service name (case-insensitive match).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum number of items to return.
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+          description: Number of records to skip.
+      responses:
+        '200':
+          description: Matching subscriptions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      summary: Create a subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '201':
+          description: Created subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /subscriptions/{id}:
+    get:
+      summary: Retrieve a subscription by ID
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '200':
+          description: The requested subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Replace an existing subscription
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '200':
+          description: Updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Delete a subscription
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '204':
+          description: Subscription removed
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /subscriptions/summary:
+    get:
+      summary: Sum prices for subscriptions in a period
+      parameters:
+        - in: query
+          name: start
+          required: true
+          schema:
+            type: string
+          description: Start month-year (MM-YYYY) inclusive.
+        - in: query
+          name: end
+          required: true
+          schema:
+            type: string
+          description: End month-year (MM-YYYY) inclusive.
+        - in: query
+          name: user_id
+          schema:
+            type: string
+            format: uuid
+          description: Optional user filter.
+        - in: query
+          name: service_name
+          schema:
+            type: string
+          description: Optional service filter.
+      responses:
+        '200':
+          description: Total monthly cost
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    SubscriptionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        price:
+          type: integer
+          description: Monthly price in rubles (whole number)
+        user_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-[0-9]{4}$'
+          description: |
+            Month and year when the subscription starts (MM-YYYY).
+        end_date:
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-[0-9]{4}$'
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      example:
+        id: "bc2cc2cf-1d2f-41cf-b742-f70d08c56b93"
+        service_name: "Yandex Plus"
+        price: 400
+        user_id: "60601fee-2bf1-4721-ae6f-7636e79a0cba"
+        start_date: "07-2025"
+        created_at: "2025-07-01T12:00:00Z"
+    SubscriptionRequest:
+      type: object
+      required:
+        - service_name
+        - price
+        - user_id
+        - start_date
+      properties:
+        service_name:
+          type: string
+        price:
+          type: integer
+          minimum: 0
+          description: Monthly price in rubles.
+        user_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-[0-9]{4}$'
+        end_date:
+          type: string
+          pattern: '^(0[1-9]|1[0-2])-[0-9]{4}$'
+          nullable: true
+      example:
+        service_name: "Yandex Plus"
+        price: 400
+        user_id: "60601fee-2bf1-4721-ae6f-7636e79a0cba"
+        start_date: "07-2025"
+    SummaryResponse:
+      type: object
+      properties:
+        total_price:
+          type: integer
+          description: Sum of monthly prices for matching subscriptions.
+      example:
+        total_price: 1200
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
